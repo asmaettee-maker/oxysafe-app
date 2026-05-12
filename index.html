@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>OxySafe - Monitor Cloud</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; text-align: center; color: #333; }
+        .card { background: white; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); padding: 20px; width: 300px; margin: 20px auto; }
+        .pressure-value { font-size: 3rem; font-weight: bold; color: #007bff; }
+        .status { color: #28a745; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>OxySafe Monitor 🩺</h1>
+    
+    <div class="card">
+        <h3>Pression Actuelle</h3>
+        <div id="pression" class="pressure-value">--</div>
+        <p>Unité: Bar</p>
+        <div id="status" class="status">Connexion au Cloud...</div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.17.1/firebase-app.js";
+        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.17.1/firebase-database.js";
+
+        // Vos configurations récupérées de l'image
+        const firebaseConfig = {
+            apiKey: "AIzaSyCzwbB34hh9r7mdUugeIZx1BND2Ysey3bg",
+            authDomain: "oxysafe-monitor.firebaseapp.com",
+            databaseURL: "https://oxysafe-monitor-default-rtdb.firebaseio.com",
+            projectId: "oxysafe-monitor",
+            storageBucket: "oxysafe-monitor.firebasestorage.app",
+            messagingSenderId: "807497596996",
+            appId: "1:807497596996:web:5a917b715d5e6691a63c11"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // Lecture en temps réel
+        const pressureRef = ref(db, 'OxySafe/Pression_Actuelle');
+        onValue(pressureRef, (snapshot) => {
+            const val = snapshot.val();
+            document.getElementById('pression').innerText = val ? val.toFixed(2) : "0.00";
+            document.getElementById('status').innerText = "● En direct du Cloud";
+        });
+    </script>
+</body>
+</html>
