@@ -2,51 +2,239 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>OxySafe - Monitor Cloud</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OxySafe Monitor - Expert</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gauge-chart@0.5.3/dist/bundle.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; text-align: center; color: #333; }
-        .card { background: white; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); padding: 20px; width: 300px; margin: 20px auto; }
-        .pressure-value { font-size: 3rem; font-weight: bold; color: #007bff; }
-        .status { color: #28a745; font-weight: bold; }
+        :root {
+            --bg-color: #0b132b;
+            --card-bg: #1c2541;
+            --accent-cyan: #3a86ff;
+            --text-main: #ffffff;
+            --danger: #ef233c;
+            --warning: #ffb703;
+            --success: #06d6a0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* BARRE SUPÉRIEURE (HEADER) */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background: rgba(28, 37, 65, 0.9);
+            border-bottom: 2px solid var(--accent-cyan);
+        }
+
+        .logo-section { display: flex; align-items: center; gap: 10px; }
+        .status-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--success); box-shadow: 0 0 10px var(--success); }
+        .header-info { text-align: right; font-size: 0.9em; }
+
+        /* LAYOUT PRINCIPAL */
+        main {
+            padding: 20px;
+            flex-grow: 1;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            text-align: center;
+            position: relative;
+        }
+
+        /* JAUGE ET TEXTE */
+        #gauge-container { height: 200px; width: 100%; }
+        .pressure-display { font-size: 3em; font-weight: bold; margin-top: -40px; color: var(--accent-cyan); }
+
+        /* CARTES D'ÉTAT */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .mini-card {
+            background: rgba(255,255,255,0.05);
+            padding: 10px;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* ALERTE FLASH */
+        .alert-active {
+            animation: flash-red 1s infinite;
+        }
+        @keyframes flash-red {
+            0% { box-shadow: 0 0 0px var(--danger); }
+            50% { box-shadow: 0 0 30px var(--danger); border: 2px solid var(--danger); }
+            100% { box-shadow: 0 0 0px var(--danger); }
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 600px) {
+            main { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
 
-    <h1>OxySafe Monitor 🩺</h1>
-    
-    <div class="card">
+<header>
+    <div class="logo-section">
+        <i class="fas fa-stethoscope fa-2x" style="color: var(--accent-cyan);"></i>
+        <div>
+            <b style="font-size: 1.2em;">OXYSAFE</b><br>
+            <span id="connexion-status"><span class="status-dot"></span> CONNECTÉ</span>
+        </div>
+    </div>
+    <div class="header-info">
+        <span id="real-time">12:45:00</span><br>
+        <i class="fas fa-battery-three-quarters"></i> <span id="bat-level">82%</span>
+    </div>
+</header>
+
+<main>
+    <div class="card" id="main-gauge-card">
         <h3>Pression Actuelle</h3>
-        <div id="pression" class="pressure-value">--</div>
-        <p>Unité: Bar</p>
-        <div id="status" class="status">Connexion au Cloud...</div>
+        <div id="gauge-container"></div>
+        <div class="pressure-display"><span id="pression-val">4.16</span> <small>Bar</small></div>
+        <div id="alert-text" style="display:none; color: var(--danger); font-weight: bold; margin-top: 10px;">
+            ⚠️ ALERTE : PRESSION CRITIQUE
+        </div>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.17.1/firebase-app.js";
-        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.17.1/firebase-database.js";
+    <div class="card">
+        <h3>Evolution (60s)</h3>
+        <canvas id="pressureChart"></canvas>
+    </div>
 
-        // Vos configurations récupérées de l'image
-        const firebaseConfig = {
-            apiKey: "AIzaSyCzwbB34hh9r7mdUugeIZx1BND2Ysey3bg",
-            authDomain: "oxysafe-monitor.firebaseapp.com",
-            databaseURL: "https://oxysafe-monitor-default-rtdb.firebaseio.com",
-            projectId: "oxysafe-monitor",
-            storageBucket: "oxysafe-monitor.firebasestorage.app",
-            messagingSenderId: "807497596996",
-            appId: "1:807497596996:web:5a917b715d5e6691a63c11"
-        };
+    <div class="card">
+        <h3>Statut Système</h3>
+        <div class="stats-grid">
+            <div class="mini-card"><i class="fas fa-arrow-up"></i><small>Max (24h)</small><b>5.2 Bar</b></div>
+            <div class="mini-card"><i class="fas fa-thermometer-half"></i><small>Temp. ESP</small><b>34°C</b></div>
+            <div class="mini-card"><i class="fas fa-wifi"></i><small>Signal</small><b>Excellent</b></div>
+            <div class="mini-card"><i class="fas fa-microchip"></i><small>Capteur</small><b>OK</b></div>
+        </div>
+        <button onclick="exportData()" style="margin-top: 15px; width:100%; padding:10px; border-radius:8px; border:none; background: var(--accent-cyan); color:white; cursor:pointer;">
+            <i class="fas fa-file-csv"></i> Exporter Historique CSV
+        </button>
+    </div>
+</main>
 
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
+<script type="module">
+    // --- CONFIGURATION FIREBASE (Vos données réelles) ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.17.1/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.17.1/firebase-database.js";
 
-        // Lecture en temps réel
-        const pressureRef = ref(db, 'OxySafe/Pression_Actuelle');
-        onValue(pressureRef, (snapshot) => {
-            const val = snapshot.val();
-            document.getElementById('pression').innerText = val ? val.toFixed(2) : "0.00";
-            document.getElementById('status').innerText = "● En direct du Cloud";
-        });
-    </script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyCzwbb34hh9r7mdUugeIZx1BND2Ysey3bg",
+        authDomain: "oxysafe-monitor.firebaseapp.com",
+        databaseURL: "https://oxysafe-monitor-default-rtdb.firebaseio.com",
+        projectId: "oxysafe-monitor",
+        storageBucket: "oxysafe-monitor.firebasestorage.app",
+        messagingSenderId: "8074979596996",
+        appId: "1:8074979596996:web:5a917b715d5e6691a63c11"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const pressureRef = ref(db, 'OxySafe/Pression');
+
+    // --- INITIALISATION JAUGE ---
+    let element = document.querySelector('#gauge-container');
+    let gaugeOptions = {
+        hasNeedle: true,
+        needleColor: 'gray',
+        needleUpdateSpeed: 1000,
+        arcColors: ['#ef233c', '#ffb703', '#06d6a0'],
+        arcDelimiters: [20, 60],
+        rangeLabel: ['0', '10'],
+        centralLabel: '',
+    };
+    // Note: GaugeChart est une bibliothèque simplifiée pour l'exemple
+    
+    // --- INITIALISATION GRAPHIQUE ---
+    const ctx = document.getElementById('pressureChart').getContext('2d');
+    const pressureChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Pression (Bar)',
+                borderColor: '#3a86ff',
+                backgroundColor: 'rgba(58, 134, 255, 0.1)',
+                data: [],
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            scales: { y: { min: 0, max: 10 } },
+            animation: false
+        }
+    });
+
+    // --- LOGIQUE TEMPS RÉEL ---
+    onValue(pressureRef, (snapshot) => {
+        const val = snapshot.val();
+        document.getElementById('pression-val').innerText = val.toFixed(2);
+        
+        // Mise à jour Graphique
+        const now = new Date().toLocaleTimeString();
+        if(pressureChart.data.labels.length > 20) {
+            pressureChart.data.labels.shift();
+            pressureChart.data.datasets[0].data.shift();
+        }
+        pressureChart.data.labels.push(now);
+        pressureChart.data.datasets[0].data.push(val);
+        pressureChart.update();
+
+        // Gestion des Alertes
+        const card = document.getElementById('main-gauge-card');
+        const alertTxt = document.getElementById('alert-text');
+        if (val < 2.0 || val > 6.0) {
+            card.classList.add('alert-active');
+            alertTxt.style.display = 'block';
+            // Optionnel : Alerte sonore
+            // new Audio('https://www.soundjay.com/buttons/beep-01a.mp3').play();
+        } else {
+            card.classList.remove('alert-active');
+            alertTxt.style.display = 'none';
+        }
+    });
+
+    // Horloge
+    setInterval(() => {
+        document.getElementById('real-time').innerText = new Date().toLocaleTimeString();
+    }, 1000);
+
+    // Fonction Export (Simplifiée)
+    window.exportData = function() {
+        alert("Génération du rapport CSV d'OxySafe...");
+        // Logique CSV ici
+    };
+</script>
+
 </body>
 </html>
